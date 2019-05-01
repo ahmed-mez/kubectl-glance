@@ -1,4 +1,4 @@
-module github.com/mfpierre/kubectl-glance
+module github.com/ahmed-mez/kubectl-glance
 
 require (
 	github.com/briandowns/spinner v0.0.0-20190319032542-ac46072a5a91
