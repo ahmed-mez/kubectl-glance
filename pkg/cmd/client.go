@@ -53,7 +53,8 @@ func (o *globalSettings) GetNamespacedRessources() (map[string]int, error) {
 		return namespacedResources, fmt.Errorf("got an error while getting namespaces: %s", err)
 	}
 
-	namespacedResources[namespaces] = len(ns.Items)
+	namespacesCount := len(ns.Items)
+	namespacedResources[namespaces] = namespacesCount
 	namespacedResources[pods] = 0
 	namespacedResources[services] = 0
 	namespacedResources[configs] = 0
@@ -67,58 +68,44 @@ func (o *globalSettings) GetNamespacedRessources() (map[string]int, error) {
 	namespacedResources[statefulsets] = 0
 	namespacedResources[jobs] = 0
 
+	o.chans = initBufferedChans(namespacesCount)
+	ticker := namespacesCount
 	for _, n := range ns.Items {
-		opts := metav1.ListOptions{}
-		po, err := o.client.CoreV1().Pods(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[pods] += len(po.Items)
-		}
-		svc, err := o.client.CoreV1().Services(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[services] += len(svc.Items)
-		}
-		cm, err := o.client.CoreV1().ConfigMaps(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[configs] += len(cm.Items)
-		}
-		sec, err := o.client.CoreV1().Secrets(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[secrets] += len(sec.Items)
-		}
-		sa, err := o.client.CoreV1().ServiceAccounts(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[sas] += len(sa.Items)
-		}
-		end, err := o.client.CoreV1().Endpoints(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[endpoints] += len(end.Items)
-		}
-		pvc, err := o.client.CoreV1().PersistentVolumeClaims(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[pvcs] += len(pvc.Items)
-		}
-		ds, err := o.client.AppsV1().DaemonSets(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[daemonsets] = len(ds.Items)
-		}
-		depl, err := o.client.AppsV1().Deployments(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[deploys] = len(depl.Items)
-		}
-		rs, err := o.client.AppsV1().ReplicaSets(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[replicasets] = len(rs.Items)
-		}
-		sts, err := o.client.AppsV1().StatefulSets(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[statefulsets] = len(sts.Items)
-		}
-		j, err := o.client.BatchV1().Jobs(n.Name).List(opts)
-		if err == nil {
-			namespacedResources[jobs] = len(j.Items)
+		go o.GetRessourcesByNamespace(n.Name)
+	}
+	for {
+		select {
+		case p := <-o.chans.pods:
+			namespacedResources[pods] += p
+		case svc := <-o.chans.services:
+			namespacedResources[services] += svc
+		case c := <-o.chans.configs:
+			namespacedResources[configs] += c
+		case pvc := <-o.chans.pvcs:
+			namespacedResources[pvcs] += pvc
+		case sec := <-o.chans.secrets:
+			namespacedResources[secrets] += sec
+		case sa := <-o.chans.sas:
+			namespacedResources[sas] += sa
+		case e := <-o.chans.endpoints:
+			namespacedResources[endpoints] += e
+		case ds := <-o.chans.daemonsets:
+			namespacedResources[daemonsets] += ds
+		case dep := <-o.chans.deploys:
+			namespacedResources[deploys] += dep
+		case rs := <-o.chans.replicasets:
+			namespacedResources[replicasets] += rs
+		case sts := <-o.chans.statefulsets:
+			namespacedResources[statefulsets] += sts
+		case j := <-o.chans.jobs:
+			namespacedResources[jobs] += j
+		case <-o.chans.done:
+			ticker--
+			if ticker == 0 {
+				return namespacedResources, nil
+			}
 		}
 	}
-	return namespacedResources, nil
 }
 
 func (o *globalSettings) GetPersistentVolumes() (int, error) {
@@ -147,4 +134,77 @@ func (o *globalSettings) GetNodes() (int, int, string, string, error) {
 		memAllocatable.Add(n.Status.Capacity[corev1.ResourceName("memory")])
 	}
 	return len(no.Items), unschedulable, cpuAllocatable.String(), memAllocatable.String(), nil
+}
+
+func (o *globalSettings) GetRessourcesByNamespace(namespace string) {
+	defer func() {
+		o.chans.done <- 1
+	}()
+	opts := metav1.ListOptions{}
+	p, err := o.client.CoreV1().Pods(namespace).List(opts)
+	if err == nil {
+		o.chans.pods <- len(p.Items)
+	}
+	svc, err := o.client.CoreV1().Services(namespace).List(opts)
+	if err == nil {
+		o.chans.services <- len(svc.Items)
+	}
+	c, err := o.client.CoreV1().ConfigMaps(namespace).List(opts)
+	if err == nil {
+		o.chans.configs <- len(c.Items)
+	}
+	sec, err := o.client.CoreV1().Secrets(namespace).List(opts)
+	if err == nil {
+		o.chans.secrets <- len(sec.Items)
+	}
+	sa, err := o.client.CoreV1().ServiceAccounts(namespace).List(opts)
+	if err == nil {
+		o.chans.sas <- len(sa.Items)
+	}
+	e, err := o.client.CoreV1().Endpoints(namespace).List(opts)
+	if err == nil {
+		o.chans.endpoints <- len(e.Items)
+	}
+	pvc, err := o.client.CoreV1().PersistentVolumeClaims(namespace).List(opts)
+	if err == nil {
+		o.chans.pvcs <- len(pvc.Items)
+	}
+	ds, err := o.client.AppsV1().DaemonSets(namespace).List(opts)
+	if err == nil {
+		o.chans.daemonsets <- len(ds.Items)
+	}
+	dep, err := o.client.AppsV1().Deployments(namespace).List(opts)
+	if err == nil {
+		o.chans.deploys <- len(dep.Items)
+	}
+	rs, err := o.client.AppsV1().ReplicaSets(namespace).List(opts)
+	if err == nil {
+		o.chans.replicasets <- len(rs.Items)
+	}
+	sts, err := o.client.AppsV1().StatefulSets(namespace).List(opts)
+	if err == nil {
+		o.chans.statefulsets <- len(sts.Items)
+	}
+	j, err := o.client.BatchV1().Jobs(namespace).List(opts)
+	if err == nil {
+		o.chans.jobs <- len(j.Items)
+	}
+}
+
+func initBufferedChans(buffSize int) *channels {
+	return &channels{
+		pods:         make(chan int, buffSize),
+		services:     make(chan int, buffSize),
+		configs:      make(chan int, buffSize),
+		pvcs:         make(chan int, buffSize),
+		sas:          make(chan int, buffSize),
+		secrets:      make(chan int, buffSize),
+		endpoints:    make(chan int, buffSize),
+		daemonsets:   make(chan int, buffSize),
+		deploys:      make(chan int, buffSize),
+		replicasets:  make(chan int, buffSize),
+		statefulsets: make(chan int, buffSize),
+		jobs:         make(chan int, buffSize),
+		done:         make(chan int, buffSize),
+	}
 }

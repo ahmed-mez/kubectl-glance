@@ -77,6 +77,23 @@ type globalSettings struct {
 	client      *kubernetes.Clientset
 	namespace   string
 	restConfig  *rest.Config
+	chans       *channels
+}
+
+type channels struct {
+	pods         chan int
+	services     chan int
+	configs      chan int
+	pvcs         chan int
+	sas          chan int
+	secrets      chan int
+	endpoints    chan int
+	daemonsets   chan int
+	deploys      chan int
+	replicasets  chan int
+	statefulsets chan int
+	jobs         chan int
+	done         chan int
 }
 
 func init() {

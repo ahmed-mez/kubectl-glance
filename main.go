@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/mfpierre/kubectl-glance/pkg/cmd"
+	"github.com/ahmed-mez/kubectl-glance/pkg/cmd"
 	"github.com/spf13/pflag"
 )
 
