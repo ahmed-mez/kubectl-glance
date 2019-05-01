@@ -13,3 +13,6 @@
 
 # binary
 kubectl-glance
+
+# vscode
+.vscode
