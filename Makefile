@@ -1,4 +1,6 @@
 # Env
+DEPCMD=dep
+DEP_ENSURE=$(DEPCMD) ensure
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
@@ -9,7 +11,8 @@ export GO111MODULE=on
 all: test build
 
 build:
-	$(GOBUILD) -o $(BINARY_NAME) -v
+	$(DEP_ENSURE) -v
+	$(GOBUILD) -o $(BINARY_NAME) -mod=readonly -v
 
 test:
 	$(GOTEST) -v ./...
