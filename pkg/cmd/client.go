@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -23,6 +25,8 @@ const replicasets = "replica sets"
 const statefulsets = "stateful sets"
 const jobs = "jobs"
 
+const timeout = time.Duration(120) // TODO: Make the timeout value configurable
+
 func (o *globalSettings) InitClient() {
 	restConfig, err := o.configFlags.ToRESTConfig()
 	if err != nil {
@@ -34,6 +38,7 @@ func (o *globalSettings) InitClient() {
 	o.namespace = ns
 	o.client = c
 	o.restConfig = restConfig
+	o.timeout = timeout
 }
 
 // GeNodeForPod gets the node of a pod
@@ -104,6 +109,8 @@ func (o *globalSettings) GetNamespacedRessources() (map[string]int, error) {
 			if ticker == 0 {
 				return namespacedResources, nil
 			}
+		case <-time.After(o.timeout * time.Second):
+			return nil, errors.New("Timeout")
 		}
 	}
 }

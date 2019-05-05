@@ -78,6 +78,7 @@ type globalSettings struct {
 	namespace   string
 	restConfig  *rest.Config
 	chans       *channels
+	timeout     time.Duration
 }
 
 type channels struct {
